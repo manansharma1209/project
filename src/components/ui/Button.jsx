@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
 import { cn } from '../../lib/utils';
 
-const Button = forwardRef(({ className, variant = 'primary', ...props }, ref) => {
+export const Button = forwardRef(({ className, variant = 'primary', ...props }, ref) => {
   return (
     <button
       ref={ref}
@@ -22,5 +22,3 @@ const Button = forwardRef(({ className, variant = 'primary', ...props }, ref) =>
 });
 
 Button.displayName = 'Button';
-
-export { Button };

@@ -35,10 +35,10 @@ export function ExpenseCard({
           <div>
             <h3 className="text-lg font-medium">{expense.category}</h3>
             <p className="text-sm text-gray-500">
-              ${expense.amount.toLocaleString()}
+              ${expense.amount}
             </p>
             {isApprovalView && (
-              <p className="text-sm text-gray-500">Submitted by: {userName}</p>
+              <p className="text-sm text-gray-500">Submitted by: {expense.user.name}</p>
             )}
           </div>
         </div>
@@ -103,7 +103,7 @@ export function ExpenseCard({
           <DialogTitle>Receipt</DialogTitle>
           <div className="mt-4 space-y-4">
             <p>Receipt for {expense.category} expense:</p>
-            <img src={URL.createObjectURL(expense.receipt)} alt="Receipt" className="w-full h-auto" />
+            <img src={`data:image/png;base64,${expense.receipt}`} alt="Receipt" className="w-full h-auto" />
             <div className="flex justify-end space-x-2">
               <Button variant="secondary" onClick={() => setShowReceipt(false)}>
                 Close

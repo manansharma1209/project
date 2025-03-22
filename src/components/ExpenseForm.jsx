@@ -10,7 +10,7 @@ const CATEGORIES = [
   'Accommodation'
 ];
 
-export function ExpenseForm({ onSubmit, onCancel, initialData }) {
+export function ExpenseForm({ onSubmit, onCancel, initialData, showExpenseForm }) {
   const [formData, setFormData] = useState({
     amount: '',
     category: '',
@@ -26,10 +26,17 @@ export function ExpenseForm({ onSubmit, onCancel, initialData }) {
         amount: initialData.amount,
         category: initialData.category,
         description: initialData.description,
+        receipt: initialData.receipt || null // Prefill receipt if available
+      });
+    } else {
+      setFormData({
+        amount: '',
+        category: '',
+        description: '',
         receipt: null
       });
     }
-  }, [initialData]);
+  }, [initialData, showExpenseForm]);
 
   const handleChange = (e) => {
     const { name, value, files } = e.target;
@@ -54,7 +61,7 @@ export function ExpenseForm({ onSubmit, onCancel, initialData }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.amount || !formData.category || !formData.description || (!formData.receipt && !initialData)) {
+    if (!formData.amount || !formData.category || !formData.description || !formData.receipt) {
       setError('All fields are required');
       return;
     }
@@ -129,6 +136,11 @@ export function ExpenseForm({ onSubmit, onCancel, initialData }) {
             accept=".pdf,.jpg,.jpeg,.png"
             className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
           />
+          {formData.receipt && (
+            <p className="mt-1 text-sm text-gray-500">
+              Current file: {formData.receipt.name || 'Existing file'}
+            </p>
+          )}
           <p className="mt-1 text-sm text-gray-500">
             Accepted formats: PDF, JPEG, PNG (max 5MB)
           </p>

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { Sidebar } from './components/Sidebar';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import axios from 'axios';
+import { Sidebar } from './components/SideBar';
 import { UserMenu } from './components/UserMenu';
 import { ExpenseCard } from './components/ExpenseCard';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from './components/ui/Dialog';
@@ -9,56 +11,55 @@ import { ExpenseForm } from './components/ExpenseForm';
 import { NotificationIcon } from './components/NotificationIcon';
 import { NotificationList } from './components/NotificationList';
 import { ExpenseFilter } from './components/ExpenseFilter';
+import { Login } from './Components/Login';
+import { AdminApp } from './Components/Admin/AdminPage'; // Import the AdminApp component
 
-// Mock data - replace with actual API calls
-const mockUser = {
-  id: '1',
-  name: 'John Doe',
-  email: 'john@example.com',
-  isManager: true,
-  department: 'Engineering',
-  position: 'Senior Developer',
+// Authentication check function
+const isAuthenticated = () => {
+  return localStorage.getItem('user') !== null;
 };
 
-const mockExpenses = [
-  {
-    id: '1',
-    userId: '1',
-    userName: 'Jane Smith',
-    category: 'TRAVEL',
-    amount: 1200,
-    description: 'Flight tickets for conference',
-    status: 'PENDING',
-    createdAt: '2024-03-10T10:00:00Z',
-    updatedAt: '2024-03-10T10:00:00Z',
-    receipt: new Blob(), // Mock receipt file
-  },
-  // Add more mock expenses as needed
-];
+// Admin check function
+const isAdmin = () => {
+  const user = localStorage.getItem('user');
+  if (!user) return false;
+  return JSON.parse(user).role == "ADMIN";
+};
 
-const mockNotifications = [
-  {
-    id: '1',
-    userId: '1',
-    message: 'Your expense request has been approved.',
-    createdAt: '2024-03-11T10:00:00Z',
-  },
-  {
-    id: '2',
-    userId: '1',
-    message: 'Your expense request has been rejected. Reason: Insufficient funds.',
-    createdAt: '2024-03-12T10:00:00Z',
+// Protected route component
+const ProtectedRoute = ({ children }) => {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" />;
   }
-  // Add more mock notifications as needed
-];
+  return children;
+};
 
-function App() {
+// Admin route component
+const AdminRoute = ({ children }) => {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" />;
+  }
+  if (!isAdmin()) {
+    return <Navigate to="/home" />;
+  }
+  return children;
+};
+
+// Public route component (accessible only when NOT logged in)
+const PublicRoute = ({ children }) => {
+  if (isAuthenticated()) {
+    return <Navigate to="/home" />;
+  }
+  return children;
+};
+
+function Dashboard() {
   const [activeTab, setActiveTab] = useState('requests');
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [expenses, setExpenses] = useState(mockExpenses);
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [expenses, setExpenses] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [editingExpense, setEditingExpense] = useState(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState(null);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
@@ -66,6 +67,38 @@ function App() {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const filterButtonRef = useRef(null);
   const filterDropdownRef = useRef(null);
+  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
+
+  // Fetch expenses from the backend
+  useEffect(() => {
+    const fetchExpenses = async () => {
+      try {
+        const response = await axios.get(`http://localhost:8080/api/expenses/user?userId=${user.id}`);
+        setExpenses(Array.isArray(response.data) ? response.data : []);
+        console.log(response.data);
+      } catch (error) {
+        console.error('Error fetching expenses:', error);
+        setExpenses([]);
+      }
+    };
+
+    fetchExpenses();
+  }, [user.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+        fetchNotifications();
+    }
+}, [user]);
+
+const fetchNotifications = async () => {
+    try {
+        const response = await axios.get(`http://localhost:8080/api/notifications/user/${user.id}`);
+        setNotifications(response.data);
+    } catch (error) {
+        console.error("Error fetching notifications:", error);
+    }
+};
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -83,66 +116,111 @@ function App() {
   }, []);
 
   const handleLogout = () => {
-    // Implement logout logic
-    console.log('Logging out...');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
   };
 
   const handleApprove = async (id) => {
-    // Implement approve logic
-    console.log('Approving request:', id);
-    // Mock API call to update expense status
-    const updatedExpenses = expenses.map(expense =>
-      expense.id === id ? { ...expense, status: 'APPROVED' } : expense
-    );
-    setExpenses(updatedExpenses);
+    try {
+      const targetExpense = expenses.find(expense => expense.id === id);
+      let response = await axios.put(`http://localhost:8080/api/expenses/${id}/status/approve?userId=${user.id}&status=APPROVED&approvedBy=${user.id}`);
+      
+      if(response.status == 200){
+        await axios.post(`http://localhost:8080/api/notifications/`, {
+          message: `Your expense request for ${targetExpense.category}. And amount ${targetExpense.amount} has been approved.`,
+          status: 'APPROVED',
+          userId: targetExpense.user.id,
+              managerId: user.id,
+              expenseId: id
+      });
+      
+      }
+      const updatedExpenses = expenses.map(expense =>
+        expense.id === id ? { ...expense, status: 'APPROVED'} : expense
+      );
+      setExpenses(updatedExpenses);
 
-    // Mock API call to add notification
-    const newNotification = {
-      id: String(Date.now()),
-      userId: id,
-      message: 'Your expense request has been approved.',
-      createdAt: new Date().toISOString(),
-    };
-    setNotifications([newNotification, ...notifications]);
+      const newNotification = {
+        message: `Your expense request for ${targetExpense.category}. And amount ${targetExpense.amount} has been approved.`,
+        status: 'APPROVED',
+        userId: targetExpense.user.id,
+        managerId: user.id,
+        expenseId: id,
+        createdAt: new Date().toISOString(),
+      };
+      setNotifications([newNotification, ...notifications]);
+    } catch (error) {
+      console.error('Error approving expense:', error);
+    }
   };
 
   const handleReject = async (id, reason) => {
-    // Implement reject logic
-    console.log('Rejecting request:', id, 'Reason:', reason);
-    // Mock API call to update expense status
-    const updatedExpenses = expenses.map(expense =>
-      expense.id === id ? { ...expense, status: 'REJECTED' } : expense
-    );
-    setExpenses(updatedExpenses);
+    try {
+      const targetExpense = expenses.find(expense => expense.id === id);
+      let response = await axios.put(`http://localhost:8080/api/expenses/${id}/status/reject?userId=${user.id}&status=REJECTED&reason=${reason}&rejectedBy=${user.id}`);
 
-    // Mock API call to add notification
-    const newNotification = {
-      id: String(Date.now()),
-      userId: id,
-      message: `Your expense request has been rejected. Reason: ${reason}`,
-      createdAt: new Date().toISOString(),
-    };
-    setNotifications([newNotification, ...notifications]);
+      if(response.status == 200){
+        await axios.post(`http://localhost:8080/api/notifications/`, {
+          message: `Your expense request for ${targetExpense.category}. And amount ${targetExpense.amount} has been rejected. Due to ${reason}. By ${user.name}`,
+          status: 'REJECTED',
+          userId: targetExpense.user.id,
+          managerId: user.id,
+          expenseId: id
+      });
+      
+      const updatedExpenses = expenses.map(expense =>
+        expense.id === id ? { ...expense, status: 'REJECTED' } : expense
+      );
+      setExpenses(updatedExpenses);
+
+      const newNotification = {
+        message: `Your expense request for ${targetExpense.category}. And amount ${targetExpense.amount} has been rejected. Due to ${reason}. By ${user.name}`,
+        status: 'REJECTED',
+        userId: targetExpense.user.id,
+        managerId: user.id,
+        expenseId: id,
+        createdAt: new Date().toISOString(),
+      };
+      setNotifications([newNotification, ...notifications]);
+  
+      
+    }
+    } catch (error) {
+      console.error('Error rejecting expense:', error);
+    }
   };
+  
 
-  const handleExpenseSubmit = (formData) => {
-    // Here you would typically make an API call to submit the expense
-    const newExpense = {
-      id: String(Date.now()),
-      userId: mockUser.id,
-      userName: mockUser.name,
-      category: formData.category.toUpperCase(),
-      amount: parseFloat(formData.amount),
-      description: formData.description,
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      receipt: formData.receipt,
-    };
+  const handleExpenseSubmit = async (formData) => {
+    try {
+        const response = await axios.post(
+            `http://localhost:8080/api/expenses`, // Remove userId from query params
+            {
+                userId: user.id,  // Send userId in request body
+                expense: { // Wrap expense details inside an object
+                    category: formData.category.toUpperCase(),
+                    amount: parseFloat(formData.amount),
+                    description: formData.description,
+                    receipt: "string",
+                }
+            },
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            }
+        );
 
-    setExpenses([newExpense, ...expenses]);
-    setShowExpenseForm(false);
-  };
+        const newExpense = response.data;
+        setExpenses([newExpense, ...expenses]);
+        setShowExpenseForm(false);
+    } catch (error) {
+        console.error("Error submitting expense:", error);
+    }
+};
+
+
+  
 
   const handleEdit = (id) => {
     const expenseToEdit = expenses.find(expense => expense.id === id);
@@ -155,19 +233,48 @@ function App() {
     setShowDeleteConfirm(true);
   };
 
-  const confirmDelete = () => {
-    setExpenses(expenses.filter(expense => expense.id !== deletingExpenseId));
-    setShowDeleteConfirm(false);
-    setDeletingExpenseId(null);
+  const confirmDelete = async () => {
+    try {
+      await axios.delete(`http://localhost:8080/api/expenses/${deletingExpenseId}`, {
+        params: { userId: user.id }
+      });
+      setExpenses(expenses.filter(expense => expense.id !== deletingExpenseId));
+      setShowDeleteConfirm(false);
+      setDeletingExpenseId(null);
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+    }
   };
 
-  const handleExpenseUpdate = (formData) => {
-    setExpenses(expenses.map(expense => 
-      expense.id === editingExpense.id ? { ...expense, ...formData } : expense
-    ));
-    setEditingExpense(null);
-    setShowExpenseForm(false);
-  };
+  const handleExpenseUpdate = async (formData) => {
+    try {
+        const response = await axios.put(
+            `http://localhost:8080/api/expenses/${editingExpense.id}?userId=${user.id}`, // Add userId here
+            {
+                category: formData.category.toUpperCase(),
+                amount: parseFloat(formData.amount),
+                description: formData.description,
+                receipt: 'string',  // Ensure correct handling of receipt
+                status: formData.status || 'PENDING' // Default status if missing
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        const updatedExpense = response.data;
+        setExpenses(expenses.map(expense => 
+            expense.id === editingExpense.id ? updatedExpense : expense
+        ));
+        setEditingExpense(null);
+        setShowExpenseForm(false);
+    } catch (error) {
+        console.error('Error updating expense:', error);
+    }
+};
+
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
@@ -189,7 +296,7 @@ function App() {
   return (
     <div className="flex h-screen bg-gray-100">
       <Sidebar
-        isManager={mockUser.isManager}
+        isManager={user.manager}
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
@@ -202,7 +309,7 @@ function App() {
           <div className="flex items-center space-x-4">
             <NotificationIcon notifications={notifications} onClick={() => setShowAllNotifications(true)} />
             <UserMenu
-              user={mockUser}
+              user={user}
               onLogout={handleLogout}
               onViewProfile={() => setShowProfileDialog(true)}
             />
@@ -211,7 +318,7 @@ function App() {
 
         <main className="h-[calc(100vh-4rem)] overflow-y-auto p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-semibold">Welcome {mockUser.name},</h2>
+            <h2 className="text-2xl font-semibold">Welcome {user.name},</h2>
             <div className="flex items-center space-x-4">
               {activeTab === 'requests' && (
                 <Button variant="primary" onClick={() => setShowExpenseForm(true)}>
@@ -246,8 +353,7 @@ function App() {
           <Dialog open={showExpenseForm} onOpenChange={setShowExpenseForm}>
             <DialogContent>
               <ExpenseForm
-                onSubmit={handleExpenseSubmit}
-                onUpdate={handleExpenseUpdate}
+                onSubmit={editingExpense ? handleExpenseUpdate : handleExpenseSubmit}
                 editingExpense={editingExpense}
               />
             </DialogContent>
@@ -260,16 +366,19 @@ function App() {
               </DialogTitle>
               <div className="mt-4 space-y-2">
                 <p>
-                  <strong>Name:</strong> {mockUser.name}
+                  <strong>Name:</strong> {user.name}
                 </p>
                 <p>
-                  <strong>Email:</strong> {mockUser.email}
+                  <strong>Email:</strong> {user.email}
                 </p>
                 <p>
-                  <strong>Department:</strong> {mockUser.department}
+                  <strong>Department:</strong> {user.department}
                 </p>
                 <p>
-                  <strong>Position:</strong> {mockUser.position}
+                  <strong>Position:</strong> {user.position}
+                </p>
+                <p>
+                  <strong>Role:</strong> {user.role || 'User'}
                 </p>
               </div>
             </DialogContent>
@@ -306,7 +415,6 @@ function App() {
               <ExpenseCard
                 key={expense.id}
                 expense={expense}
-                userName={expense.userName}
                 isApprovalView={activeTab === 'approvals'}
                 onApprove={handleApprove}
                 onReject={handleReject}
@@ -318,6 +426,31 @@ function App() {
         </main>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        } />
+        <Route path="/home" element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/*" element={
+          <AdminRoute>
+            <AdminApp />
+          </AdminRoute>
+        } />
+        <Route path="*" element={<Navigate to={isAuthenticated() ? "/home" : "/login"} />} />
+      </Routes>
+    </Router>
   );
 }
 
