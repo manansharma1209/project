@@ -208,7 +208,7 @@ export function SearchUser({ onEditUser }) {
                 email: user.email,
                 role: user.role,
                 managerId: user.managerId,
-                joiningDate: user.joiningDate,
+                dateOfJoining: user.dateOfJoining,
                 isManager: user.isManager
               }}
               subordinates={[]}  // We'll fetch these when view is clicked

@@ -193,17 +193,37 @@ const fetchNotifications = async () => {
 
   const handleExpenseSubmit = async (formData) => {
     try {
-        const response = await axios.post(
-            `http://localhost:8080/api/expenses`, // Remove userId from query params
+        // Upload the receipt file first
+        const receiptFormData = new FormData();
+        receiptFormData.append('file', formData.receipt);
+
+        const uploadResponse = await axios.post(
+            `http://localhost:8080/api/upload/pdf`,
+            receiptFormData,
             {
-                userId: user.id,  // Send userId in request body
-                expense: { // Wrap expense details inside an object
-                    category: formData.category.toUpperCase(),
-                    amount: parseFloat(formData.amount),
-                    description: formData.description,
-                    receipt: "string",
-                }
-            },
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+            }
+        );
+        console.log(uploadResponse.data);
+        const receiptUrl = uploadResponse.data;
+
+        // Now submit the expense with the receipt URL
+        const expenseData = {
+            userId: user.id,
+            category: formData.category.toUpperCase(),
+            amount: parseFloat(formData.amount),
+            description: formData.description,
+            receipt: receiptUrl, //! URL Idahr he
+        };
+        console.log(expenseData);
+        
+
+
+        const response = await axios.post(
+            `http://localhost:8080/api/expenses`,
+            expenseData,
             {
                 headers: {
                     "Content-Type": "application/json",
@@ -219,8 +239,6 @@ const fetchNotifications = async () => {
     }
 };
 
-
-  
 
   const handleEdit = (id) => {
     const expenseToEdit = expenses.find(expense => expense.id === id);
