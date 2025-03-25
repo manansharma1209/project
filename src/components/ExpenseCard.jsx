@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, X, Edit, Trash, Download } from 'lucide-react'; // Replaced Eye with Download
+import { Check, X, Edit, Trash, Eye, Download } from 'lucide-react';
 import { getCategoryIcon } from '../lib/utils';
 import { Button } from './ui/Button';
 import { Dialog, DialogContent, DialogTitle } from './ui/Dialog';
@@ -19,6 +19,13 @@ export function ExpenseCard({
   const [fileType, setFileType] = useState(null);
   const Icon = getCategoryIcon(expense.category);
 
+
+  const handleReject = () => {
+    onReject(expense.id, rejectionReason);
+    setShowRejectConfirm(false);
+    setRejectionReason('');
+  };
+
   useEffect(() => {
     if (expense.receipt) {
       fetch(expense.receipt, { method: "HEAD" })
@@ -27,17 +34,10 @@ export function ExpenseCard({
     }
   }, [expense.receipt]);
 
-  const handleReject = () => {
-    onReject(expense.id, rejectionReason);
-    setShowRejectConfirm(false);
-    setRejectionReason('');
-  };
-
-  // Function to handle file download
   const handleDownload = () => {
     const link = document.createElement("a");
     link.href = expense.receipt;
-    link.download = `receipt_${expense.expenseID}.pdf`; // Default name
+    link.download = `receipt_${expense.expenseID}.pdf;` // Default name
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

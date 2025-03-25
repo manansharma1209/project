@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { UserCircle, Edit, Trash, Users } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Dialog, DialogContent, DialogTitle } from './ui/Dialog';
@@ -7,9 +8,29 @@ export function UserCard({
   user,
   onEdit,
   onDelete,
-  subordinates = []
+  reportees = []
 }) {
-  const [showSubordinates, setShowSubordinates] = useState(false);
+  const [showReportees, setShowReportees] = useState(false);
+  const [reporteeDetails, setReporteeDetails] = useState([]);
+
+  const fetchReporteeDetails = async () => {
+    try {
+      const loggedInUserWissenID = JSON.parse(localStorage.getItem('user')).wissenID;
+      const reporteeDetailsPromises = reportees.map(reporteeWissenId =>
+        axios.get('http://localhost:8080/api/users/getReporteeInfo', {
+          params: {
+            reporteeWissenId: reporteeWissenId
+          }
+        })
+      );
+      const responses = await Promise.all(reporteeDetailsPromises);
+      const reporteeDetails = responses.map(response => response.data);
+      setReporteeDetails(reporteeDetails);
+      setShowReportees(true);
+    } catch (error) {
+      console.error('Error fetching reportee details:', error);
+    }
+  };
 
   // Hardcoded subordinate sample data
   const sampleSubordinates = [
@@ -30,7 +51,7 @@ export function UserCard({
             <UserCircle className="h-6 w-6 text-gray-600" />
           </div>
           <div>
-            <h3 className="text-lg font-medium">{user.name}</h3>
+            <h3 className="text-lg font-medium">{user.name} {user.wissenID}</h3>
             <p className="text-sm text-gray-500">{user.role}</p>
             <p className="text-sm text-gray-500">{user.email}</p>
           </div>
@@ -48,12 +69,12 @@ export function UserCard({
       <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
         <div>
           <p className="text-sm text-gray-600">Manager ID: {user.managerId || 'N/A'}</p>
-          <p className="text-sm text-gray-600 mt-1">Date of Joining: {new Date(user.dateOfJoining).toLocaleDateString()}</p>
+          <p className="text-sm text-gray-600 mt-1">Date of Joining: {user.joiningDate}</p>
         </div>
         <div className="flex items-center space-x-2">
           <Button
             variant="secondary"
-            onClick={() => setShowSubordinates(true)}
+            onClick={fetchReporteeDetails} // Trigger the fetch function
             className="flex items-center space-x-1 h-8 px-3 py-0"
           >
             <Users className="h-4 w-4" />
@@ -62,37 +83,36 @@ export function UserCard({
         </div>
       </div>
 
-      {/* Subordinates Dialog */}
-      <Dialog open={showSubordinates} onOpenChange={setShowSubordinates}>
-        <DialogContent className="sm:max-w-[600px]"> {/* Increased width */}
-          <DialogTitle>Subordinates</DialogTitle>
+      <Dialog open={showReportees} onOpenChange={setShowReportees}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogTitle>Reportees</DialogTitle>
           <div className="mt-4 space-y-4">
-            {sampleSubordinates.length > 0 ? (
+            {reporteeDetails.length > 0 ? (
               <div className="max-h-60 overflow-y-auto">
                 <table className="w-full table-fixed">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left pb-2 w-1/4">Wissen ID</th>
-                      <th className="text-left pb-2 w-1/3">Name</th>
-                      <th className="text-left pb-2 w-1/3">Email</th>
+                    <tr>
+                      <th className="text-left pb-2">Name</th>
+                      <th className="text-left pb-2">Wissen ID</th>
+                      <th className="text-left pb-2">Email</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sampleSubordinates.map((subordinate) => (
-                      <tr key={subordinate.id} className="border-b">
-                        <td className="py-2">{subordinate.id}</td>
-                        <td className="py-2">{subordinate.name}</td>
-                        <td className="py-2">{subordinate.email}</td>
+                    {reporteeDetails.map((reportee) => (
+                      <tr key={reportee.wissenID}>
+                        <td className="py-2">{reportee.name}</td>
+                        <td className="py-2">{reportee.wissenID}</td>
+                        <td className="py-2">{reportee.email}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p>No subordinates found.</p>
+              <p>No reportees found.</p>
             )}
             <div className="flex justify-end space-x-2">
-              <Button variant="secondary" onClick={() => setShowSubordinates(false)}>
+              <Button variant="secondary" onClick={() => setShowReportees(false)}>
                 Close
               </Button>
             </div>

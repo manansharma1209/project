@@ -5,13 +5,14 @@ import { Card } from '../ui/Card';
 
 export function AddUser({ editingUser, setEditingUser }) {
   const [formData, setFormData] = useState({
+    wissenId: '', // Add Wissen ID field
     fullName: '',
     email: '',
     joiningDate: '',
     role: '',
     managerId: '',
     isManager: 'No',
-    subordinates: '',
+    reportees: '',
     password: ''  // Only for new users
   });
 
@@ -23,13 +24,14 @@ export function AddUser({ editingUser, setEditingUser }) {
   useEffect(() => {
     if (editingUser) {
       setFormData({
+        wissenId: editingUser.wissenId || '', // Add Wissen ID field
         fullName: editingUser.name || '',
         email: editingUser.email || '',
         joiningDate: editingUser.joiningDate ? new Date(editingUser.joiningDate).toISOString().split('T')[0] : '',
         role: editingUser.role || '',
         managerId: editingUser.managerId || '',
         isManager: editingUser.isManager ? 'Yes' : 'No',
-        subordinates: editingUser.subordinateIds ? editingUser.subordinateIds.join(', ') : '',
+        reportees: editingUser.reportees ? editingUser.reportees.join(', ') : '',
         // No password field when editing
       });
     }
@@ -47,26 +49,28 @@ export function AddUser({ editingUser, setEditingUser }) {
     setError('');
 
     // Transform form data to API format
+    // console.log(formData.wissenId);
     const userData = {
+      wissenID: formData.wissenId, // Add Wissen ID field
       name: formData.fullName,
       email: formData.email,
-      date_of_joining: formData.joiningDate,
+      dateOfJoining: formData.joiningDate,
       role: formData.role,
-      manager_id: formData.managerId || null,
-      is_Manager: formData.isManager === 'Yes',
-      subordinate_ids: formData.subordinates ? formData.subordinates.split(',').map(id => id.trim()) : []
+      managerId: formData.managerId || null,
+      isManager: formData.isManager === 'Yes',
+      reportees: formData.reportees ? formData.reportees.split(',').map(id => id.trim()) : []
     };
-    console.log(editingUser);
+    // console.log(editingUser);
 
-    if (editingUser == null || !editingUser) {
+    if (!editingUser) {
       userData.password = formData.password; // Only include password for new users
     }
-    console.log(userData);
+    // console.log(userData);
 
     try {
       if (editingUser) {
         // Update existing user
-        await axios.put(`http://localhost:8080/api/users/${editingUser.id}`, userData);
+        await axios.put(`http://localhost:8080/api/users/${formData.wissenId}`, userData);
         setSuccess(true);
         setError('');
         // Reset form after 3 seconds
@@ -77,8 +81,8 @@ export function AddUser({ editingUser, setEditingUser }) {
         }, 3000);
       } else {
         // Create new user
-        console.log(userData);
-        await axios.post('http://localhost:8080/api/users', userData);
+        // console.log(userData);
+        await axios.post('http://localhost:8080/api/users/', userData);
         setSuccess(true);
         setError('');
         // Reset form after 3 seconds
@@ -97,13 +101,14 @@ export function AddUser({ editingUser, setEditingUser }) {
 
   const resetForm = () => {
     setFormData({
+      wissenId: '', // Add Wissen ID field
       fullName: '',
       email: '',
       joiningDate: '',
       role: '',
       managerId: '',
       isManager: 'No',
-      subordinates: '',
+      reportees: '',
       password: ''
     });
   };
@@ -127,6 +132,20 @@ export function AddUser({ editingUser, setEditingUser }) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Wissen ID
+          </label>
+          <input
+            type="text"
+            name="wissenId"
+            value={formData.wissenId}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            required
+          />
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Full Name
@@ -231,14 +250,14 @@ export function AddUser({ editingUser, setEditingUser }) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Subordinates (Comma separated IDs)
+            Reportees (Comma separated IDs)
           </label>
           <textarea
-            name="subordinates"
-            value={formData.subordinates}
+            name="reportees"
+            value={formData.reportees}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            placeholder="e.g. user123, user456, user789"
+            placeholder="e.g. WCS001, WCS002, WCS003"
             rows="3"
           />
         </div>
