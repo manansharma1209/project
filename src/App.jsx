@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Sidebar } from './components/SideBar';
 import { UserMenu } from './components/UserMenu';
@@ -23,7 +23,7 @@ const isAuthenticated = () => {
 const isAdmin = () => {
   const user = localStorage.getItem('user');
   if (!user) return false;
-  return JSON.parse(user).role == "ADMIN";
+  return JSON.parse(user).role === "ADMIN";
 };
 
 // Protected route component
@@ -48,7 +48,7 @@ const AdminRoute = ({ children }) => {
 // Public route component (accessible only when NOT logged in)
 const PublicRoute = ({ children }) => {
   if (isAuthenticated()) {
-    return <Navigate to="/home" />;
+    return <Navigate to={isAdmin() ? "/admin" : "/home"} />;
   }
   return children;
 };
@@ -67,13 +67,14 @@ function Dashboard() {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const filterButtonRef = useRef(null);
   const filterDropdownRef = useRef(null);
+  const [approveRequests, setApproveRequests] = useState([]);
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
 
   // Fetch expenses from the backend
   useEffect(() => {
     const fetchExpenses = async () => {
       try {
-        const response = await axios.get(`http://localhost:8080/api/expenses/user?userId=${user.id}`);
+        const response = await axios.get(`http://localhost:8080/api/expenses/user?userId=${user.wissenID}`);
         setExpenses(Array.isArray(response.data) ? response.data : []);
         console.log(response.data);
       } catch (error) {
@@ -83,22 +84,45 @@ function Dashboard() {
     };
 
     fetchExpenses();
-  }, [user.id]);
+  }, [user.wissenID]);
 
   useEffect(() => {
-    if (user?.id) {
+    if (user?.wissenID) {
         fetchNotifications();
     }
-}, [user]);
+  }, [user]);
 
-const fetchNotifications = async () => {
-    try {
-        const response = await axios.get(`http://localhost:8080/api/notifications/user/${user.id}`);
-        setNotifications(response.data);
-    } catch (error) {
-        console.error("Error fetching notifications:", error);
+  useEffect(() => {
+    if (user.isManager) {
+      fetchApproveRequests();
     }
-};
+  }, [user]);
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await axios.get(`http://localhost:8080/api/notifications/user/${user.wissenID}`);
+      setNotifications(response.data);
+      console.log("notifications",response.data);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  };
+
+  const fetchApproveRequests = async () => {
+    if (!user.isManager) return;
+  
+    try {
+      console.log("reportees", user.reportees);
+      const approveRequestsPromises = user.reportees.map(reporteeWissenId =>
+        axios.get(`http://localhost:8080/api/expenses/user?userId=${reporteeWissenId}`)
+      );
+      const responses = await Promise.all(approveRequestsPromises);
+      const approveRequests = responses.flatMap(response => response.data);
+      setApproveRequests(approveRequests);
+    } catch (error) {
+      console.error('Error fetching approve requests:', error);
+    }
+  };
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -122,15 +146,16 @@ const fetchNotifications = async () => {
 
   const handleApprove = async (id) => {
     try {
-      const targetExpense = expenses.find(expense => expense.id === id);
-      let response = await axios.put(`http://localhost:8080/api/expenses/${id}/status/approve?userId=${user.id}&status=APPROVED&approvedBy=${user.id}`);
+      const targetExpense = approveRequests.find(expense => expense.id === id);
+      console.log(targetExpense);
+      let response = await axios.put(`http://localhost:8080/api/expenses/${id}/status/approve?userId=${targetExpense.wissenID}&status=APPROVED&approvedBy=${user.wissenID}`);
       
       if(response.status == 200){
         await axios.post(`http://localhost:8080/api/notifications/`, {
           message: `Your expense request for ${targetExpense.category}. And amount ${targetExpense.amount} has been approved.`,
           status: 'APPROVED',
-          userId: targetExpense.user.id,
-              managerId: user.id,
+          userId: targetExpense.user.wissenID,
+              managerId: user.wissenID,
               expenseId: id
       });
       
@@ -143,8 +168,8 @@ const fetchNotifications = async () => {
       const newNotification = {
         message: `Your expense request for ${targetExpense.category}. And amount ${targetExpense.amount} has been approved.`,
         status: 'APPROVED',
-        userId: targetExpense.user.id,
-        managerId: user.id,
+        userId: targetExpense.user.wissenID,
+        managerId: user.wissenID,
         expenseId: id,
         createdAt: new Date().toISOString(),
       };
@@ -156,15 +181,15 @@ const fetchNotifications = async () => {
 
   const handleReject = async (id, reason) => {
     try {
-      const targetExpense = expenses.find(expense => expense.id === id);
-      let response = await axios.put(`http://localhost:8080/api/expenses/${id}/status/reject?userId=${user.id}&status=REJECTED&reason=${reason}&rejectedBy=${user.id}`);
+      const targetExpense = approveRequests.find(expense => expense.id === id);
+      let response = await axios.put(`http://localhost:8080/api/expenses/${id}/status/reject?userId=${targetExpense.wissenID}&status=REJECTED&reason=${reason}&rejectedBy=${user.wissenID}`);
 
       if(response.status == 200){
         await axios.post(`http://localhost:8080/api/notifications/`, {
           message: `Your expense request for ${targetExpense.category}. And amount ${targetExpense.amount} has been rejected. Due to ${reason}. By ${user.name}`,
           status: 'REJECTED',
-          userId: targetExpense.user.id,
-          managerId: user.id,
+          userId: targetExpense.user.wissenID,
+          managerId: user.wissenID,
           expenseId: id
       });
       
@@ -176,8 +201,8 @@ const fetchNotifications = async () => {
       const newNotification = {
         message: `Your expense request for ${targetExpense.category}. And amount ${targetExpense.amount} has been rejected. Due to ${reason}. By ${user.name}`,
         status: 'REJECTED',
-        userId: targetExpense.user.id,
-        managerId: user.id,
+        userId: targetExpense.user.wissenID,
+        managerId: user.wissenID,
         expenseId: id,
         createdAt: new Date().toISOString(),
       };
@@ -193,17 +218,37 @@ const fetchNotifications = async () => {
 
   const handleExpenseSubmit = async (formData) => {
     try {
-        const response = await axios.post(
-            `http://localhost:8080/api/expenses`, // Remove userId from query params
+        // Upload the receipt file first
+        const receiptFormData = new FormData();
+        receiptFormData.append('file', formData.receipt);
+
+        const uploadResponse = await axios.post(
+            `http://localhost:8080/api/upload/pdf`,
+            receiptFormData,
             {
-                userId: user.id,  // Send userId in request body
-                expense: { // Wrap expense details inside an object
-                    category: formData.category.toUpperCase(),
-                    amount: parseFloat(formData.amount),
-                    description: formData.description,
-                    receipt: "string",
-                }
-            },
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+            }
+        );
+        console.log(uploadResponse.data);
+        const receiptUrl = uploadResponse.data;
+
+        // Now submit the expense with the receipt URL
+        const expenseData = {
+            userId: user.wissenID,
+            category: formData.category.toUpperCase(),
+            amount: parseFloat(formData.amount),
+            description: formData.description,
+            receipt: receiptUrl, //! URL Idahr he
+        };
+        console.log(expenseData);
+        
+
+
+        const response = await axios.post(
+            `http://localhost:8080/api/expenses/`,
+            expenseData,
             {
                 headers: {
                     "Content-Type": "application/json",
@@ -236,7 +281,7 @@ const fetchNotifications = async () => {
   const confirmDelete = async () => {
     try {
       await axios.delete(`http://localhost:8080/api/expenses/${deletingExpenseId}`, {
-        params: { userId: user.id }
+        params: { userId: user.wissenID }
       });
       setExpenses(expenses.filter(expense => expense.id !== deletingExpenseId));
       setShowDeleteConfirm(false);
@@ -249,14 +294,15 @@ const fetchNotifications = async () => {
   const handleExpenseUpdate = async (formData) => {
     try {
         const response = await axios.put(
-            `http://localhost:8080/api/expenses/${editingExpense.id}?userId=${user.id}`, // Add userId here
-            {
+            `http://localhost:8080/api/expenses/${editingExpense.id}?userId=${user.wissenID}`, // Add userId here
+            { 
+              "expense":{
                 category: formData.category.toUpperCase(),
                 amount: parseFloat(formData.amount),
                 description: formData.description,
                 receipt: 'string',  // Ensure correct handling of receipt
                 status: formData.status || 'PENDING' // Default status if missing
-            },
+            }},
             {
                 headers: {
                     'Content-Type': 'application/json'
@@ -293,10 +339,11 @@ const fetchNotifications = async () => {
     filteredExpenses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
+  console.log(user);
   return (
     <div className="flex h-screen bg-gray-100">
       <Sidebar
-        isManager={user.manager}
+        isManager={user.isManager}
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
@@ -315,7 +362,7 @@ const fetchNotifications = async () => {
             />
           </div>
         </header>
-
+        
         <main className="h-[calc(100vh-4rem)] overflow-y-auto p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-semibold">Welcome {user.name},</h2>
@@ -349,7 +396,7 @@ const fetchNotifications = async () => {
               </div>
             </div>
           </div>
-
+        
           <Dialog open={showExpenseForm} onOpenChange={setShowExpenseForm}>
             <DialogContent>
               <ExpenseForm
@@ -358,7 +405,7 @@ const fetchNotifications = async () => {
               />
             </DialogContent>
           </Dialog>
-
+        
           <Dialog open={showProfileDialog} onOpenChange={setShowProfileDialog}>
             <DialogContent>
               <DialogTitle className="text-lg font-semibold">
@@ -383,7 +430,7 @@ const fetchNotifications = async () => {
               </div>
             </DialogContent>
           </Dialog>
-
+        
           <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogTitle>Confirm Deletion</DialogTitle>
@@ -400,7 +447,7 @@ const fetchNotifications = async () => {
               </div>
             </DialogContent>
           </Dialog>
-
+        
           <Dialog open={showAllNotifications} onOpenChange={setShowAllNotifications}>
             <DialogContent>
               <NotificationList
@@ -409,20 +456,41 @@ const fetchNotifications = async () => {
               />
             </DialogContent>
           </Dialog>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredExpenses.map((expense) => (
-              <ExpenseCard
-                key={expense.id}
-                expense={expense}
-                isApprovalView={activeTab === 'approvals'}
-                onApprove={handleApprove}
-                onReject={handleReject}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
+        
+          {activeTab === 'requests' && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredExpenses.map((expense) => (
+                <ExpenseCard
+                  key={expense.id}
+                  expense={expense}
+                  isApprovalView={false}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          )}
+        
+          {activeTab === 'approvals' && user.isManager && (
+            <div className="mt-8">
+              {/* <h2 className="text-2xl font-semibold mb-4">Approve Requests</h2> */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {approveRequests.map((expense) => (
+                  <ExpenseCard
+                    key={expense.id}
+                    expense={expense}
+                    isApprovalView={true}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>
@@ -448,7 +516,7 @@ function App() {
             <AdminApp />
           </AdminRoute>
         } />
-        <Route path="*" element={<Navigate to={isAuthenticated() ? "/home" : "/login"} />} />
+        <Route path="*" element={<Navigate to={isAuthenticated() ? (isAdmin() ? "/admin" : "/home") : "/login"} />} />
       </Routes>
     </Router>
   );

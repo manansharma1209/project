@@ -17,11 +17,22 @@ export function Login() {
 
     if (Object.keys(newErrors).length === 0) {
       try {
-        const response = await axios.get(`http://localhost:8080/api/users/Login?email=${email}&password=${password}`);
+        const response = await axios.post(
+          "http://localhost:8080/api/users/authenticate",
+          { email, password },  // Send as JSON body
+          { withCredentials: true } // Ensure cookies are sent if using sessions
+        );
         if (response.data) {
           console.log(response.data);
-          localStorage.setItem('user', JSON.stringify(response.data));
-          navigate('/home');
+          const userData = response.data;
+          localStorage.setItem('user', JSON.stringify(userData));
+          
+          // Check if user is admin and navigate accordingly
+          if (userData.role === "ADMIN") {
+            navigate('/admin');
+          } else {
+            navigate('/home');
+          }
         } else {
           setErrors({ general: "Invalid email or password" });
         }

@@ -46,9 +46,11 @@ export function SearchUser({ onEditUser }) {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:8080/api/users');
+      const response = await axios.get('http://localhost:8080/api/users/');
+      console.log(response.data);
       setUsers(response.data);
       setFilteredUsers(response.data);
+      console.log('Fetched users:', response.data); // Log the fetched users
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -101,10 +103,12 @@ export function SearchUser({ onEditUser }) {
   const handleDeleteUser = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
+        console.log('Deleting user with ID:', userId);
         await axios.delete(`http://localhost:8080/api/users/${userId}`);
         // Remove the deleted user from state
-        setUsers(users.filter(user => user.id !== userId));
-        setFilteredUsers(filteredUsers.filter(user => user.id !== userId));
+        // setUsers(users.filter(user => user.id !== userId));
+        // setFilteredUsers(filteredUsers.filter(user => user.id !== userId));
+        fetchUsers(); // Refetch users to update the list
       } catch (error) {
         console.error('Error deleting user:', error);
         alert('Failed to delete user. Please try again.');
@@ -199,23 +203,26 @@ export function SearchUser({ onEditUser }) {
         <div className="text-center py-10">No users found. Try adjusting your search criteria.</div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredUsers.map((user) => (
-            <UserCard
-              key={user.id}
-              user={{
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                managerId: user.managerId,
-                joiningDate: user.joiningDate,
-                isManager: user.isManager
-              }}
-              subordinates={[]}  // We'll fetch these when view is clicked
-              onEdit={() => onEditUser(user)}
-              onDelete={() => handleDeleteUser(user.id)}
-            />
-          ))}
+          {filteredUsers.map((user) => {
+  return (
+    <UserCard
+      key={user.wissenID} // Use wissenId as the key
+      user={{
+        id: user.wissenID,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        managerId: user.managerId,
+        joiningDate: user.dateOfJoining,
+        isManager: user.isManager,
+        wissenID: user.wissenID // Ensure wissenId is passed to UserCard
+      }}
+      reportees={user.reportees || []}
+      onEdit={() => onEditUser(user)}
+      onDelete={() => handleDeleteUser(user.wissenID)}
+    />
+  );
+})}
         </div>
       )}
     </div>
